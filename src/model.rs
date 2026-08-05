@@ -9,14 +9,4 @@ pub struct DayForecast {
     pub summary: String,       // short RealFeel/description text -> translated
 }
 
-impl DayForecast {
-    /// Text that gets sent to the translation engine (everything except pure numbers/%/° tokens
-    /// is translated; numbers are preserved verbatim by the translate module).
-    pub fn translatable_fields(&self) -> Vec<&str> {
-        vec![
-            &self.day_name,
-            &self.condition,
-            &self.summary,
-        ]
-    }
-}
+impl DayForecast {}

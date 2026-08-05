@@ -1,76 +1,69 @@
 use anyhow::{Context, Result};
-use base64::{engine::general_purpose, Engine as _};
-use serde_json::json;
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 
-/// Synthesizes `kannada_text` to speech using Google Cloud Text-to-Speech when a
-/// key is configured. Without a key, a short silent audio placeholder is written so
-/// the rest of the pipeline can still produce a video for free.
-pub fn synthesize_kannada_mp3(api_key: &str, kannada_text: &str, out_path: &Path) -> Result<()> {
-    if api_key.trim().is_empty() {
-        return write_silent_audio(out_path);
+/// Free Kannada female voice via Microsoft Edge's neural TTS (no API key
+/// needed). Requires the `edge-tts` CLI: `pip install edge-tts`.
+/// https://pypi.org/project/edge-tts/
+const KANNADA_FEMALE_VOICE: &str = "kn-IN-SapnaNeural";
+
+/// Synthesizes `kannada_text` to an MP3 using edge-tts. Writes the script to a
+/// temp .txt file first (edge-tts handles long text more reliably via --file
+/// than via a single --text argument on some shells/platforms).
+pub fn synthesize_kannada_mp3(_api_key: &str, kannada_text: &str, out_path: &Path) -> Result<()> {
+    if which("edge-tts").is_none() {
+        anyhow::bail!(
+            "edge-tts is not installed or not on PATH. Install it with: pip install edge-tts"
+        );
     }
 
-    let client = reqwest::blocking::Client::new();
+    let script_path = out_path.with_extension("script.txt");
+    fs::write(&script_path, kannada_text)
+        .with_context(|| format!("writing narration script to {}", script_path.display()))?;
 
-    let body = json!({
-        "input": { "text": kannada_text },
-        "voice": {
-            "languageCode": "kn-IN",
-            "name": "kn-IN-Standard-A"
-        },
-        "audioConfig": { "audioEncoding": "MP3" }
-    });
+    let status = Command::new("edge-tts")
+        .arg("--voice")
+        .arg(KANNADA_FEMALE_VOICE)
+        .arg("--file")
+        .arg(&script_path)
+        .arg("--write-media")
+        .arg(out_path)
+        .status()
+        .context("spawning edge-tts (is it installed? `pip install edge-tts`)")?;
 
-    let resp: serde_json::Value = client
-        .post("https://texttospeech.googleapis.com/v1/text:synthesize")
-        .query(&[("key", api_key)])
-        .json(&body)
-        .send()
-        .context("calling Google TTS API")?
-        .json()
-        .context("parsing TTS API response")?;
+    if !status.success() {
+        anyhow::bail!("edge-tts failed to synthesize audio; check its output above");
+    }
 
-    let audio_b64 = resp["audioContent"]
-        .as_str()
-        .with_context(|| format!("unexpected TTS API response: {resp}"))?;
+    validate_audio(out_path)
+}
 
-    let audio_bytes = general_purpose::STANDARD
-        .decode(audio_b64)
-        .context("decoding base64 audio")?;
-
-    fs::write(out_path, audio_bytes)
-        .with_context(|| format!("writing MP3 to {}", out_path.display()))?;
-
+/// Corruption check: the file must exist and be a plausible, non-trivial size.
+/// edge-tts occasionally writes a 0-byte file on network/voice errors without
+/// a non-zero exit code, so size is checked explicitly here.
+fn validate_audio(path: &Path) -> Result<()> {
+    let meta = fs::metadata(path)
+        .with_context(|| format!("checking generated audio at {}", path.display()))?;
+    if meta.len() < 2048 {
+        anyhow::bail!(
+            "generated audio at {} is suspiciously small ({} bytes) -- likely empty/corrupted. \
+             Check that edge-tts has network access and that the voice name '{}' is valid.",
+            path.display(),
+            meta.len(),
+            KANNADA_FEMALE_VOICE
+        );
+    }
     Ok(())
 }
 
-fn write_silent_audio(out_path: &Path) -> Result<()> {
-    // Write a tiny valid WAV file so the output is playable by media players.
-    let sample_rate = 22050_u32;
-    let bits_per_sample = 16_u16;
-    let channels = 1_u16;
-    let duration_secs = 1_u32;
-    let data_size = duration_secs * sample_rate * channels as u32 * bits_per_sample as u32 / 8;
-
-    let mut wav = Vec::new();
-    wav.extend_from_slice(b"RIFF");
-    wav.extend_from_slice(&(36 + data_size).to_le_bytes());
-    wav.extend_from_slice(b"WAVEfmt ");
-    wav.extend_from_slice(&16u32.to_le_bytes());
-    wav.extend_from_slice(&1u16.to_le_bytes());
-    wav.extend_from_slice(&channels.to_le_bytes());
-    wav.extend_from_slice(&sample_rate.to_le_bytes());
-    wav.extend_from_slice(&(sample_rate * channels as u32 * bits_per_sample as u32 / 8).to_le_bytes());
-    wav.extend_from_slice(&(channels * bits_per_sample / 8).to_le_bytes());
-    wav.extend_from_slice(&bits_per_sample.to_le_bytes());
-    wav.extend_from_slice(b"data");
-    wav.extend_from_slice(&data_size.to_le_bytes());
-    wav.extend(std::iter::repeat(0u8).take(data_size as usize));
-
-    fs::write(out_path, wav).with_context(|| format!("writing fallback audio to {}", out_path.display()))?;
-    Ok(())
+fn which(bin: &str) -> Option<()> {
+    Command::new(bin)
+        .arg("--help")
+        .output()
+        .ok()
+        .filter(|o| o.status.success() || !o.stdout.is_empty())
+        .map(|_| ())
 }
 
 /// Builds a natural-sounding Kannada script from the per-day summaries so the

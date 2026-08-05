@@ -1,4 +1,5 @@
 mod fetch;
+mod html_render;
 mod image_gen;
 mod model;
 mod translate;
@@ -6,7 +7,7 @@ mod tts;
 mod video;
 
 use anyhow::Result;
-use std::env;
+use html_render::PosterLayout;
 use std::path::PathBuf;
 
 fn main() -> Result<()> {
@@ -14,74 +15,110 @@ fn main() -> Result<()> {
     let out_dir = PathBuf::from("output");
     std::fs::create_dir_all(&out_dir)?;
 
-    let html_path = out_dir.join("mysore_forecast.html");
-    let png_path = out_dir.join("mysore_forecast_kn.png");
-    let audio_path = out_dir.join("mysore_forecast_kn.wav");
-    let mp4_path = out_dir.join("mysore_forecast_kn.mp4");
+    let data_html_path = out_dir.join("mysore_forecast.html"); // requirement #1: editable extracted-data table
+    let ig_html_path = out_dir.join("poster_ig.html");
+    let yt_html_path = out_dir.join("poster_yt.html");
+    let ig_png_path = out_dir.join("mysore_forecast_ig.png"); // 9:16
+    let yt_png_path = out_dir.join("mysore_forecast_yt.png"); // 16:9
+    let audio_path = out_dir.join("mysore_forecast_kn.mp3");
+    let ig_mp4_path = out_dir.join("mysore_forecast_ig.mp4");
+    let yt_mp4_path = out_dir.join("mysore_forecast_yt.mp4");
 
-    // Path to a Kannada-capable font. Use the bundled Noto Sans Kannada font in assets.
+    let template_path = PathBuf::from("assets/templates/poster.html");
     let font_path = PathBuf::from("assets/NotoSansKannada-VariableFont_wdth,wght.ttf");
+    let ig_bg_path = PathBuf::from("assets/ig-bg.png");
+    let yt_bg_path = PathBuf::from("assets/yt-bg.png");
 
-    // API keys are optional. If they're not configured, the app falls back to
-    // free local behavior instead of failing at startup.
-    let translate_key = env::var("GOOGLE_TRANSLATE_API_KEY").unwrap_or_default();
-    let tts_key = env::var("GOOGLE_TTS_API_KEY").unwrap_or_default();
-
-    if translate_key.trim().is_empty() && tts_key.trim().is_empty() {
-        println!("No Google API keys configured; using free fallback mode.");
+    for (label, path) in [
+        ("Kannada font", &font_path),
+        ("Instagram background (assets/ig-bg.png)", &ig_bg_path),
+        ("YouTube background (assets/yt-bg.png)", &yt_bg_path),
+    ] {
+        if !path.exists() {
+            anyhow::bail!("{label} not found at {}. Add it before running.", path.display());
+        }
     }
 
     // --- 1. fetch + parse ----------------------------------------------
-    println!("Fetching AccuWeather 10-day forecast for Mysore...");
-    let mut days = fetch::fetch_and_parse(&html_path)?;
+    println!("Fetching 10-day forecast...");
+    let mut days = fetch::fetch_and_parse(&out_dir.join("raw_weather_data.json"))?;
     days.truncate(10);
-    println!("Parsed {} day(s). Raw HTML saved to {}", days.len(), html_path.display());
+    println!("Parsed {} day(s).", days.len());
 
     // --- 2. translate ----------------------------------------------------
     println!("Translating to Kannada...");
     for day in days.iter_mut() {
-        day.day_name = translate::to_kannada(&translate_key, &day.day_name)?;
-        day.condition = translate::to_kannada(&translate_key, &day.condition)?;
+        day.day_name = translate::to_kannada(&day.day_name)?;
+        day.condition = translate::to_kannada(&day.condition)?;
         if !day.summary.is_empty() {
-            day.summary = translate::to_kannada(&translate_key, &day.summary)?;
+            day.summary = translate::to_kannada(&day.summary)?;
         }
-        // Numbers (high/low temps, precip %) are intentionally left as-is.
     }
-    let title_kn = translate::to_kannada(&translate_key, "Mysore - 10 Days weather Forecast")?;
+    let title_kn = translate::to_kannada("Mysore - 10 Days Weather Forecast")?;
+    let subtitle_kn = translate::to_kannada("10 ದಿನಗಳ ಹವಾಮಾನ ಮುನ್ಸೂಚನೆ")?;
 
-    // --- 3. render PNG -----------------------------------------------------
-    println!("Rendering PNG...");
-    image_gen::render_png(&days, &font_path, &png_path, &title_kn)?;
-    println!("Saved image to {}", png_path.display());
+    // --- 3. store extracted data as HTML (requirement #1) ------------------
+    println!("Writing extracted-data HTML...");
+    html_render::write_data_html(&days, &title_kn, &data_html_path)?;
+    println!("Saved editable data table to {}", data_html_path.display());
 
-    // --- 4. TTS ------------------------------------------------------------
-    println!("Synthesizing Kannada narration...");
+    // --- 4. render 2 posters (IG 9:16, YT 16:9) over the backgrounds -------
+    println!("Rendering poster HTML (no icons, backgrounds composited via CSS)...");
+    let ig_layout = PosterLayout::instagram_9x16();
+    let yt_layout = PosterLayout::youtube_16x9();
+
+    html_render::render_poster_html(
+        &days, &title_kn, &subtitle_kn, &template_path, &font_path, &ig_bg_path, &ig_layout, &ig_html_path,
+    )?;
+    html_render::render_poster_html(
+        &days, &title_kn, &subtitle_kn, &template_path, &font_path, &yt_bg_path, &yt_layout, &yt_html_path,
+    )?;
+
+    println!("Screenshotting Instagram (9:16) image...");
+    image_gen::screenshot_html(&ig_html_path, &ig_layout, &ig_png_path)?;
+    println!("Saved {}", ig_png_path.display());
+
+    println!("Screenshotting YouTube (16:9) image...");
+    image_gen::screenshot_html(&yt_html_path, &yt_layout, &yt_png_path)?;
+    println!("Saved {}", yt_png_path.display());
+
+    // --- 5. TTS ------------------------------------------------------------
+    // Narration is read from the same extracted data as the HTML table
+    // (day, date, condition, high, low, summary) for every day, per requirement.
+    println!("Synthesizing Kannada narration (edge-tts, free, female voice)...");
     let lines: Vec<String> = days
         .iter()
         .map(|d| {
             format!(
-                "{} {}, ಗರಿಷ್ಠ ತಾಪಮಾನ {} ಮತ್ತು ಕನಿಷ್ಠ ತಾಪಮಾನ {}. ಹವಾಮಾನ {}. {}",
-                d.day_name,
-                d.date,
-                d.high_temp,
-                d.low_temp,
-                d.condition,
-                d.summary
+                "{} {}, ಹವಾಮಾನ {}. ಗರಿಷ್ಠ ತಾಪಮಾನ {} ಮತ್ತು ಕನಿಷ್ಠ ತಾಪಮಾನ {}. {}",
+                d.day_name, d.date, d.condition, d.high_temp, d.low_temp, d.summary
             )
         })
         .collect();
     let mut script_lines = Vec::with_capacity(days.len() + 1);
-    script_lines.push("ನಮಸ್ಕಾರ ವೀಕ್ಷಕರೆ, ಮೈಸೂರಿನ ಮುಂದಿನ 10 ದಿನಗಳ ಹವಾಮಾನ ವರದಿ ಈಗಿದೇ".to_string());
+    script_lines.push(
+        "ನಮಸ್ಕಾರ ವೀಕ್ಷಕರೇ, ರೈತ ದರ್ಪಣ ಹವಾಮಾನ ವಾರದಿ ಮಾಹಿತಿ ಚಾನೆಲ್ಗೆ ಸ್ವಾಗತ. ಮುಂದಿನ 10 ದಿನದ ಹವಾಮನ ವರದಿ ಈಗಿದೆ"
+            .to_string(),
+    );
     script_lines.extend(lines);
     let script = tts::build_script(&script_lines);
-    tts::synthesize_kannada_mp3(&tts_key, &script, &audio_path)?;
-    println!("Saved audio to {}", audio_path.display());
 
-    // --- 5. merge into video -------------------------------------------------
-    println!("Merging into MP4...");
-    match video::merge_png_and_audio(&png_path, &audio_path, &mp4_path) {
-        Ok(_) => println!("Saved video to {}", mp4_path.display()),
-        Err(err) => println!("Skipping MP4 creation: {}", err),
+    match tts::synthesize_kannada_mp3("", &script, &audio_path) {
+        Ok(()) => {
+            println!("Saved audio to {}", audio_path.display());
+
+            // --- 6. merge into videos -------------------------------------------------
+            println!("Merging Instagram video...");
+            video::merge_png_and_audio(&ig_png_path, &audio_path, &ig_mp4_path)?;
+            println!("Saved {}", ig_mp4_path.display());
+
+            println!("Merging YouTube video...");
+            video::merge_png_and_audio(&yt_png_path, &audio_path, &yt_mp4_path)?;
+            println!("Saved {}", yt_mp4_path.display());
+        }
+        Err(e) => {
+            println!("Warning: TTS failed or not available: {}\nSkipping audio/video merging.", e);
+        }
     }
 
     Ok(())

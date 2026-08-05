@@ -1,6 +1,5 @@
 use crate::model::DayForecast;
 use anyhow::{Context, Result};
-use scraper::{Html, Selector};
 use std::fs;
 use std::path::Path;
 
@@ -165,59 +164,6 @@ fn weather_summary(code: u64, precip: u64) -> String {
     };
 
     format!("{}; {}.", state, precip_phrase)
-}
-
-fn parse_daily_list(html: &str) -> Result<Vec<DayForecast>> {
-    let doc = Html::parse_document(html);
-
-    // AccuWeather's 10-day page renders each day as an <a class="daily-list-item"> row
-    // inside a container with id/class containing "daily-list". Selectors kept loose
-    // on purpose; tighten/adjust after inspecting the saved HTML.
-    let item_sel = Selector::parse("a.daily-list-item").unwrap();
-    let day_sel = Selector::parse(".date p, .day").unwrap();
-    let date_sel = Selector::parse(".date .module-header, .date span").unwrap();
-    let cond_sel = Selector::parse(".phrase, .cond").unwrap();
-    let high_sel = Selector::parse(".temp-hi, .high").unwrap();
-    let low_sel = Selector::parse(".temp-lo, .low").unwrap();
-    let precip_sel = Selector::parse(".precip").unwrap();
-
-    let mut results = Vec::new();
-
-    for item in doc.select(&item_sel).take(10) {
-        let day_name = first_text(&item, &day_sel).unwrap_or_default();
-        let date = first_text(&item, &date_sel).unwrap_or_default();
-        let condition = first_text(&item, &cond_sel).unwrap_or_default();
-        let high_temp = first_text(&item, &high_sel).unwrap_or_default();
-        let low_temp = first_text(&item, &low_sel).unwrap_or_default();
-        let precip_chance = first_text(&item, &precip_sel).unwrap_or_default();
-
-        results.push(DayForecast {
-            day_name,
-            date,
-            condition,
-            high_temp,
-            low_temp,
-            precip_chance,
-            summary: String::new(), // fill in from a per-day detail fetch if desired
-        });
-    }
-
-    if results.is_empty() {
-        anyhow::bail!(
-            "No daily-list items matched. AccuWeather markup likely changed or the \
-             page served a bot-check. Inspect the saved HTML and update selectors in \
-             src/fetch.rs."
-        );
-    }
-
-    Ok(results)
-}
-
-fn first_text(item: &scraper::ElementRef, sel: &Selector) -> Option<String> {
-    item.select(sel)
-        .next()
-        .map(|e| e.text().collect::<Vec<_>>().join(" ").trim().to_string())
-        .filter(|s| !s.is_empty())
 }
 
 #[cfg(test)]
