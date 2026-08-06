@@ -11,35 +11,34 @@ pub fn write_data_html(days: &[DayForecast], title: &str, out_path: &Path) -> Re
     let mut rows = String::new();
     for day in days {
         rows.push_str(&format!(
-            "    <tr>\n      <td>{}</td>\n      <td>{}</td>\n      <td>{}</td>\n      <td>{}</td>\n      <td>{}</td>\n      <td>{}</td>\n      <td>{}</td>\n    </tr>\n",
+            "    <tr>\n      <td>{}</td>\n      <td>{}</td>\n      <td>{}</td>\n      <td>{}</td>\n      <td>{}</td>\n      <td>{}</td>\n    </tr>\n",
             escape(&day.day_name),
             escape(&day.date),
             escape(&day.condition),
             escape(&day.high_temp),
             escape(&day.low_temp),
-            escape(&day.precip_chance),
             escape(&day.summary),
         ));
     }
 
     let html = format!(
-                r#"<!DOCTYPE html>
+        r#"<!DOCTYPE html>
 <html lang="kn">
 <head>
 <meta charset="UTF-8">
 <title>{title}</title>
 </head>
 <body>
-    <h1>{title}</h1>
-    <table border="1" cellpadding="6" cellspacing="0">
-        <thead>
-            <tr>
-                <th>Day</th><th>Date</th><th>Condition</th><th>High</th><th>Low</th><th>Precip</th><th>Summary</th>
-            </tr>
-        </thead>
-        <tbody>
+  <h1>{title}</h1>
+  <table border="1" cellpadding="6" cellspacing="0">
+    <thead>
+      <tr>
+        <th>Day</th><th>Date</th><th>Condition</th><th>High</th><th>Low</th><th>Summary</th>
+      </tr>
+    </thead>
+    <tbody>
 {rows}    </tbody>
-    </table>
+  </table>
 </body>
 </html>
 "#,
@@ -138,13 +137,12 @@ pub fn render_poster_html(
     let mut rows = String::new();
     for day in days {
         rows.push_str(&format!(
-            "    <tr>\n      <td class=\"day\">{} {}</td>\n      <td class=\"condition\">{}</td>\n      <td class=\"temps\">{} / {}</td>\n      <td class=\"precip\">{}</td>\n      <td class=\"summary\">{}</td>\n    </tr>\n",
+            "    <tr>\n      <td class=\"day\">{} {}</td>\n      <td class=\"condition\">{}</td>\n      <td class=\"temps\">{} / {}</td>\n      <td class=\"summary\">{}</td>\n    </tr>\n",
             escape(&day.day_name),
             escape(&day.date),
             escape(&day.condition),
             escape(&day.high_temp),
             escape(&day.low_temp),
-            escape(&day.precip_chance),
             escape(&day.summary),
         ));
     }
@@ -152,8 +150,8 @@ pub fn render_poster_html(
     let html = template
         .replace("{{TITLE}}", &escape(title))
         .replace("{{SUBTITLE}}", &escape(subtitle))
-        .replace("{{FONT_PATH}}", &abs_path(font_path)?)
-        .replace("{{BG_IMAGE}}", &abs_path(bg_image_path)?)
+        .replace("{{FONT_PATH}}", &to_file_url(font_path)?)
+        .replace("{{BG_IMAGE}}", &to_file_url(bg_image_path)?)
         .replace("{{WIDTH}}", &layout.width.to_string())
         .replace("{{HEIGHT}}", &layout.height.to_string())
         .replace("{{PADDING}}", &layout.padding.to_string())
@@ -168,11 +166,10 @@ pub fn render_poster_html(
         .replace("{{ROW_FONT_SIZE}}", &row_font_size.to_string())
         .replace("{{SUMMARY_FONT_SIZE}}", &summary_font_size.to_string())
         .replace("{{SUMMARY_MAX_LINES}}", &summary_max_lines.to_string())
-        .replace("{{COL_DAY_PCT}}", "18")
-        .replace("{{COL_CONDITION_PCT}}", "20")
-        .replace("{{COL_TEMPS_PCT}}", "16")
-        .replace("{{COL_PRECIP_PCT}}", "10")
-        .replace("{{COL_SUMMARY_PCT}}", "36")
+        .replace("{{COL_DAY_PCT}}", "20")
+        .replace("{{COL_CONDITION_PCT}}", "22")
+        .replace("{{COL_TEMPS_PCT}}", "18")
+        .replace("{{COL_SUMMARY_PCT}}", "40")
         .replace("{{ROWS}}", &rows);
 
     fs::write(out_path, html)
@@ -185,6 +182,21 @@ fn abs_path(path: &Path) -> Result<String> {
     // On Windows, canonicalize() returns a \\?\ prefixed path; strip it so file:// URLs work.
     let s = abs.to_string_lossy().to_string();
     Ok(s.strip_prefix(r"\\?\").unwrap_or(&s).replace('\\', "/"))
+}
+
+/// Builds a correct `file://` URL from an absolute filesystem path, for both
+/// platform conventions: Windows drive-letter paths ("D:/x") need a THIRD
+/// slash (`file:///D:/x`), or the browser parses "D:" as a hostname and the
+/// resource silently fails to load (which is what caused missing background
+/// images/fonts on Windows). POSIX paths already start with "/", so a plain
+/// double-slash prefix ("file://" + "/home/x") is already correct for them.
+pub fn to_file_url(path: &Path) -> Result<String> {
+    let p = abs_path(path)?;
+    if p.starts_with('/') {
+        Ok(format!("file://{p}"))
+    } else {
+        Ok(format!("file:///{p}"))
+    }
 }
 
 fn escape(s: &str) -> String {

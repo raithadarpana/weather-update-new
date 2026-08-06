@@ -17,7 +17,7 @@
      removing the fixed per-row heights below, or the overlap bug will come back. */
   @font-face {
     font-family: "Kannada";
-    src: url("file://{{FONT_PATH}}");
+    src: url("{{FONT_PATH}}");
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
@@ -27,11 +27,14 @@
     overflow: hidden;
   }
   body {
-    background-image: url("file://{{BG_IMAGE}}");
+    background-image: url("{{BG_IMAGE}}");
     background-size: cover;
     background-position: center;
     color: #ffffff;
     padding: {{PADDING}}px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
   }
   .header {
     height: {{HEADER_HEIGHT}}px;
@@ -59,7 +62,6 @@
   table.forecast col.day { width: {{COL_DAY_PCT}}%; }
   table.forecast col.condition { width: {{COL_CONDITION_PCT}}%; }
   table.forecast col.temps { width: {{COL_TEMPS_PCT}}%; }
-  table.forecast col.precip { width: {{COL_PRECIP_PCT}}%; }
   table.forecast col.summary { width: {{COL_SUMMARY_PCT}}%; }
   table.forecast tr {
     height: {{ROW_HEIGHT}}px;
@@ -95,7 +97,7 @@
   </div>
   <table class="forecast">
     <colgroup>
-      <col class="day"><col class="condition"><col class="temps"><col class="precip"><col class="summary">
+      <col class="day"><col class="condition"><col class="temps"><col class="summary">
     </colgroup>
     {{ROWS}}
   </table>

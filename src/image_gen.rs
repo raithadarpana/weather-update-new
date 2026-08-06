@@ -1,4 +1,4 @@
-use crate::html_render::PosterLayout;
+use crate::html_render::{to_file_url, PosterLayout};
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -19,6 +19,7 @@ pub fn screenshot_html(html_path: &Path, layout: &PosterLayout, out_path: &Path)
 
     let html_abs = std::fs::canonicalize(html_path)
         .with_context(|| format!("resolving path to {}", html_path.display()))?;
+    let html_url = to_file_url(&html_abs)?;
 
     // Chromium's headless --screenshot writer can fail to resolve a relative
     // output path on Windows ("cannot find the path specified"), so make sure
@@ -43,6 +44,18 @@ pub fn screenshot_html(html_path: &Path, layout: &PosterLayout, out_path: &Path)
     let window_size = format!("{},{}", layout.width, layout.height + 100); // small chrome-UI slack
     let screenshot_arg = format!("--screenshot={}", out_abs.display());
 
+    // A dedicated, throwaway user-data-dir is essential: without it, if you
+    // already have a normal (non-headless) Chrome window open, this command
+    // gets silently forwarded to that existing process over IPC -- all the
+    // --headless/--screenshot flags are ignored, and it just opens a new tab
+    // showing your default search/new-tab page instead of rendering our HTML.
+    let profile_dir = std::env::temp_dir().join(format!(
+        "weather-report-chrome-profile-{}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(&profile_dir)
+        .with_context(|| format!("creating temp Chrome profile dir at {}", profile_dir.display()))?;
+
     let status = Command::new(&browser)
         .args([
             "--headless=new",
@@ -50,12 +63,21 @@ pub fn screenshot_html(html_path: &Path, layout: &PosterLayout, out_path: &Path)
             "--hide-scrollbars",
             "--default-background-color=00000000",
             "--force-device-scale-factor=1",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-extensions",
+            "--disable-sync",
+            "--run-all-compositor-stages-before-draw",
+            "--virtual-time-budget=10000",
+            &format!("--user-data-dir={}", profile_dir.display()),
             &format!("--window-size={window_size}"),
             &screenshot_arg,
-            &format!("file://{}", html_abs.display()),
+            &html_url,
         ])
         .status()
         .with_context(|| format!("spawning {} (is it installed?)", browser))?;
+
+    let _ = std::fs::remove_dir_all(&profile_dir);
 
     if !status.success() {
         anyhow::bail!(
@@ -95,6 +117,39 @@ fn validate_png(path: &Path, expected_w: u32, expected_h: u32) -> Result<()> {
             expected_w,
             expected_h
         );
+    }
+
+    // Catches the "background image didn't load in time" failure mode: sample
+    // pixels across the image and bail if it's suspiciously close to a single
+    // flat color (a near-blank/white page instead of the background artwork).
+    let rgb = img.to_rgb8();
+    let (sw, sh) = (rgb.width(), rgb.height());
+    if sw > 0 && sh > 0 {
+        let mut min = [255u8; 3];
+        let mut max = [0u8; 3];
+        let step_x = (sw / 40).max(1);
+        let step_y = (sh / 40).max(1);
+        let mut x = 0;
+        while x < sw {
+            let mut y = 0;
+            while y < sh {
+                let p = rgb.get_pixel(x, y).0;
+                for c in 0..3 {
+                    min[c] = min[c].min(p[c]);
+                    max[c] = max[c].max(p[c]);
+                }
+                y += step_y;
+            }
+            x += step_x;
+        }
+        let spread: u32 = (0..3).map(|c| (max[c] as u32) - (min[c] as u32)).sum();
+        if spread < 12 {
+            anyhow::bail!(
+                "generated PNG at {} looks nearly flat-colored (background image likely \
+                 failed to load before the screenshot was taken)",
+                path.display()
+            );
+        }
     }
 
     Ok(())

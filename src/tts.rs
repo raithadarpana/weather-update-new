@@ -12,17 +12,17 @@ const KANNADA_FEMALE_VOICE: &str = "kn-IN-SapnaNeural";
 /// temp .txt file first (edge-tts handles long text more reliably via --file
 /// than via a single --text argument on some shells/platforms).
 pub fn synthesize_kannada_mp3(_api_key: &str, kannada_text: &str, out_path: &Path) -> Result<()> {
-    if which("edge-tts").is_none() {
-        anyhow::bail!(
-            "edge-tts is not installed or not on PATH. Install it with: pip install edge-tts"
-        );
-    }
+    let (program, base_args) = find_edge_tts_invocation().context(
+        "edge-tts is not installed / not runnable. Install it with: pip install edge-tts \
+         (and make sure `edge-tts` or `python -m edge_tts` works from this terminal)",
+    )?;
 
     let script_path = out_path.with_extension("script.txt");
     fs::write(&script_path, kannada_text)
         .with_context(|| format!("writing narration script to {}", script_path.display()))?;
 
-    let status = Command::new("edge-tts")
+    let status = Command::new(program)
+        .args(&base_args)
         .arg("--voice")
         .arg(KANNADA_FEMALE_VOICE)
         .arg("--file")
@@ -30,7 +30,7 @@ pub fn synthesize_kannada_mp3(_api_key: &str, kannada_text: &str, out_path: &Pat
         .arg("--write-media")
         .arg(out_path)
         .status()
-        .context("spawning edge-tts (is it installed? `pip install edge-tts`)")?;
+        .with_context(|| format!("spawning {program} (is edge-tts installed? `pip install edge-tts`)"))?;
 
     if !status.success() {
         anyhow::bail!("edge-tts failed to synthesize audio; check its output above");
@@ -64,6 +64,27 @@ fn which(bin: &str) -> Option<()> {
         .ok()
         .filter(|o| o.status.success() || !o.stdout.is_empty())
         .map(|_| ())
+}
+
+/// Finds a working way to invoke edge-tts: the `edge-tts` console script if
+/// it's on PATH, otherwise `python -m edge_tts` / `python3 -m edge_tts` /
+/// `py -m edge_tts`, which works even when pip's Scripts folder isn't on
+/// PATH (a common Windows issue after `pip install edge-tts`).
+fn find_edge_tts_invocation() -> Option<(&'static str, Vec<&'static str>)> {
+    if which("edge-tts").is_some() {
+        return Some(("edge-tts", vec![]));
+    }
+    for python in ["python", "python3", "py"] {
+        let ok = Command::new(python)
+            .args(["-m", "edge_tts", "--help"])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if ok {
+            return Some((python, vec!["-m", "edge_tts"]));
+        }
+    }
+    None
 }
 
 /// Builds a natural-sounding Kannada script from the per-day summaries so the

@@ -85,6 +85,9 @@ fn main() -> Result<()> {
     // --- 5. TTS ------------------------------------------------------------
     // Narration is read from the same extracted data as the HTML table
     // (day, date, condition, high, low, summary) for every day, per requirement.
+    // This step (and video merging below) is intentionally non-fatal: the two
+    // PNGs above are the main deliverable and should always be produced even
+    // if edge-tts/ffmpeg aren't set up yet on this machine.
     println!("Synthesizing Kannada narration (edge-tts, free, female voice)...");
     let lines: Vec<String> = days
         .iter()
@@ -103,21 +106,34 @@ fn main() -> Result<()> {
     script_lines.extend(lines);
     let script = tts::build_script(&script_lines);
 
+    // Remove any stale audio/video from a previous run before attempting to
+    // regenerate them, so a failed/skipped TTS step never leaves an old file
+    // sitting in output/ that looks like a fresh (but wrong) result.
+    for stale in [&audio_path, &ig_mp4_path, &yt_mp4_path] {
+        let _ = std::fs::remove_file(stale);
+    }
+
     match tts::synthesize_kannada_mp3("", &script, &audio_path) {
         Ok(()) => {
             println!("Saved audio to {}", audio_path.display());
 
             // --- 6. merge into videos -------------------------------------------------
             println!("Merging Instagram video...");
-            video::merge_png_and_audio(&ig_png_path, &audio_path, &ig_mp4_path)?;
-            println!("Saved {}", ig_mp4_path.display());
+            match video::merge_png_and_audio(&ig_png_path, &audio_path, &ig_mp4_path) {
+                Ok(()) => println!("Saved {}", ig_mp4_path.display()),
+                Err(err) => println!("Skipping Instagram video: {err}"),
+            }
 
             println!("Merging YouTube video...");
-            video::merge_png_and_audio(&yt_png_path, &audio_path, &yt_mp4_path)?;
-            println!("Saved {}", yt_mp4_path.display());
+            match video::merge_png_and_audio(&yt_png_path, &audio_path, &yt_mp4_path) {
+                Ok(()) => println!("Saved {}", yt_mp4_path.display()),
+                Err(err) => println!("Skipping YouTube video: {err}"),
+            }
         }
-        Err(e) => {
-            println!("Warning: TTS failed or not available: {}\nSkipping audio/video merging.", e);
+        Err(err) => {
+            println!(
+                "Skipping audio/video (both PNGs above were still generated successfully): {err}"
+            );
         }
     }
 
