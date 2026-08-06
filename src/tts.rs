@@ -1,90 +1,75 @@
 use anyhow::{Context, Result};
+use msedge_tts::tts::client::connect;
+use msedge_tts::tts::SpeechConfig;
+use msedge_tts::voice::get_voices_list;
 use std::fs;
+use std::io::Write;
 use std::path::Path;
-use std::process::Command;
 
-/// Free Kannada female voice via Microsoft Edge's neural TTS (no API key
-/// needed). Requires the `edge-tts` CLI: `pip install edge-tts`.
-/// https://pypi.org/project/edge-tts/
-const KANNADA_FEMALE_VOICE: &str = "kn-IN-SapnaNeural";
+/// Free Kannada female voice via Microsoft Edge's neural TTS service, called
+/// directly from Rust with the `msedge-tts` crate -- no Python/edge-tts CLI
+/// install required. Requires internet access (it talks to Microsoft's
+/// service over a websocket), but nothing else.
+///
+/// NOTE: `Voice.name` from the crate is the verbose form, e.g.
+/// "Microsoft Server Speech Text to Speech Voice (kn-IN, SapnaNeural)" --
+/// NOT the short hyphenated form "kn-IN-SapnaNeural". Match on the two
+/// distinctive substrings separately instead of the hyphenated string.
+const KANNADA_LOCALE: &str = "kn-IN";
+const KANNADA_FEMALE_VOICE_HINT: &str = "SapnaNeural";
 
-/// Synthesizes `kannada_text` to an MP3 using edge-tts. Writes the script to a
-/// temp .txt file first (edge-tts handles long text more reliably via --file
-/// than via a single --text argument on some shells/platforms).
 pub fn synthesize_kannada_mp3(_api_key: &str, kannada_text: &str, out_path: &Path) -> Result<()> {
-    let (program, base_args) = find_edge_tts_invocation().context(
-        "edge-tts is not installed / not runnable. Install it with: pip install edge-tts \
-         (and make sure `edge-tts` or `python -m edge_tts` works from this terminal)",
-    )?;
+    let voices = get_voices_list()
+        .context("fetching the MSEdge TTS voice list failed (requires internet access)")?;
 
-    let script_path = out_path.with_extension("script.txt");
-    fs::write(&script_path, kannada_text)
-        .with_context(|| format!("writing narration script to {}", script_path.display()))?;
+    let voice = voices
+        .iter()
+        .find(|v| v.name.contains(KANNADA_LOCALE) && v.name.contains(KANNADA_FEMALE_VOICE_HINT))
+        .or_else(|| {
+            // Fallback: Microsoft occasionally renames specific neural voices.
+            // Any kn-IN voice is better than hard-failing the whole pipeline.
+            voices.iter().find(|v| v.name.contains(KANNADA_LOCALE))
+        })
+        .with_context(|| {
+            let sample: Vec<&str> = voices.iter().take(5).map(|v| v.name.as_str()).collect();
+            format!(
+                "no '{KANNADA_LOCALE}' voice found in the MSEdge TTS voice list at all. \
+                 First few voice names returned, for reference: {sample:?}"
+            )
+        })?;
+    let config = SpeechConfig::from(voice);
 
-    let status = Command::new(program)
-        .args(&base_args)
-        .arg("--voice")
-        .arg(KANNADA_FEMALE_VOICE)
-        .arg("--file")
-        .arg(&script_path)
-        .arg("--write-media")
-        .arg(out_path)
-        .status()
-        .with_context(|| format!("spawning {program} (is edge-tts installed? `pip install edge-tts`)"))?;
+    let mut client = connect().context("connecting to the MSEdge TTS service")?;
 
-    if !status.success() {
-        anyhow::bail!("edge-tts failed to synthesize audio; check its output above");
+    let mut audio_bytes = Vec::new();
+    for chunk in kannada_text.split('.').map(str::trim).filter(|s| !s.is_empty()) {
+        let audio = client
+            .synthesize(chunk, &config)
+            .with_context(|| format!("synthesizing narration chunk: \"{chunk}\""))?;
+        audio_bytes.extend_from_slice(&audio.audio_bytes);
     }
+
+    let mut file = fs::File::create(out_path)
+        .with_context(|| format!("creating audio file at {}", out_path.display()))?;
+    file.write_all(&audio_bytes)
+        .with_context(|| format!("writing synthesized audio to {}", out_path.display()))?;
 
     validate_audio(out_path)
 }
 
 /// Corruption check: the file must exist and be a plausible, non-trivial size.
-/// edge-tts occasionally writes a 0-byte file on network/voice errors without
-/// a non-zero exit code, so size is checked explicitly here.
 fn validate_audio(path: &Path) -> Result<()> {
     let meta = fs::metadata(path)
         .with_context(|| format!("checking generated audio at {}", path.display()))?;
     if meta.len() < 2048 {
         anyhow::bail!(
             "generated audio at {} is suspiciously small ({} bytes) -- likely empty/corrupted. \
-             Check that edge-tts has network access and that the voice name '{}' is valid.",
+             Check that this machine has internet access.",
             path.display(),
-            meta.len(),
-            KANNADA_FEMALE_VOICE
+            meta.len()
         );
     }
     Ok(())
-}
-
-fn which(bin: &str) -> Option<()> {
-    Command::new(bin)
-        .arg("--help")
-        .output()
-        .ok()
-        .filter(|o| o.status.success() || !o.stdout.is_empty())
-        .map(|_| ())
-}
-
-/// Finds a working way to invoke edge-tts: the `edge-tts` console script if
-/// it's on PATH, otherwise `python -m edge_tts` / `python3 -m edge_tts` /
-/// `py -m edge_tts`, which works even when pip's Scripts folder isn't on
-/// PATH (a common Windows issue after `pip install edge-tts`).
-fn find_edge_tts_invocation() -> Option<(&'static str, Vec<&'static str>)> {
-    if which("edge-tts").is_some() {
-        return Some(("edge-tts", vec![]));
-    }
-    for python in ["python", "python3", "py"] {
-        let ok = Command::new(python)
-            .args(["-m", "edge_tts", "--help"])
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false);
-        if ok {
-            return Some((python, vec!["-m", "edge_tts"]));
-        }
-    }
-    None
 }
 
 /// Builds a natural-sounding Kannada script from the per-day summaries so the

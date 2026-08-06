@@ -40,9 +40,9 @@ fn main() -> Result<()> {
     }
 
     // --- 1. fetch + parse ----------------------------------------------
-    println!("Fetching 10-day forecast...");
+    println!("Fetching 5-day forecast...");
     let mut days = fetch::fetch_and_parse(&out_dir.join("raw_weather_data.json"))?;
-    days.truncate(10);
+    days.truncate(5);
     println!("Parsed {} day(s).", days.len());
 
     // --- 2. translate ----------------------------------------------------
@@ -54,8 +54,8 @@ fn main() -> Result<()> {
             day.summary = translate::to_kannada(&day.summary)?;
         }
     }
-    let title_kn = translate::to_kannada("Mysore - 10 Days Weather Forecast")?;
-    let subtitle_kn = translate::to_kannada("10 ದಿನಗಳ ಹವಾಮಾನ ಮುನ್ಸೂಚನೆ")?;
+    let title_kn = translate::to_kannada("Mysore - 5 Days Weather Forecast")?;
+    let subtitle_kn = translate::to_kannada("5 ದಿನಗಳ ಹವಾಮಾನ ಮುನ್ಸೂಚನೆ")?;
 
     // --- 3. store extracted data as HTML (requirement #1) ------------------
     println!("Writing extracted-data HTML...");
@@ -67,11 +67,12 @@ fn main() -> Result<()> {
     let ig_layout = PosterLayout::instagram_9x16();
     let yt_layout = PosterLayout::youtube_16x9();
 
+    let source_label = "Source: open-meteo.com";
     html_render::render_poster_html(
-        &days, &title_kn, &subtitle_kn, &template_path, &font_path, &ig_bg_path, &ig_layout, &ig_html_path,
+        &days, &title_kn, &subtitle_kn, source_label, &template_path, &font_path, &ig_bg_path, &ig_layout, &ig_html_path,
     )?;
     html_render::render_poster_html(
-        &days, &title_kn, &subtitle_kn, &template_path, &font_path, &yt_bg_path, &yt_layout, &yt_html_path,
+        &days, &title_kn, &subtitle_kn, source_label, &template_path, &font_path, &yt_bg_path, &yt_layout, &yt_html_path,
     )?;
 
     println!("Screenshotting Instagram (9:16) image...");
@@ -100,7 +101,7 @@ fn main() -> Result<()> {
         .collect();
     let mut script_lines = Vec::with_capacity(days.len() + 1);
     script_lines.push(
-        "ನಮಸ್ಕಾರ ವೀಕ್ಷಕರೇ, ರೈತ ದರ್ಪಣ ಹವಾಮಾನ ವಾರದಿ ಮಾಹಿತಿ ಚಾನೆಲ್ಗೆ ಸ್ವಾಗತ. ಮುಂದಿನ 10 ದಿನದ ಹವಾಮನ ವರದಿ ಈಗಿದೆ"
+        "ನಮಸ್ಕಾರ ವೀಕ್ಷಕರೇ, ರೈತ ದರ್ಪಣ ಹವಾಮಾನ ವಾರದಿ ಮಾಹಿತಿ ಚಾನೆಲ್ಗೆ ಸ್ವಾಗತ. ಮುಂದಿನ 5 ದಿನದ ಹವಾಮನ ವರದಿ ಈಗಿದೆ"
             .to_string(),
     );
     script_lines.extend(lines);

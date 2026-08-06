@@ -13,3 +13,4 @@ tokio = { version = "1", features = ["full"] }
 urlencoding = "2"
 base64 = "0.22"
 chrono = { version = "0.4", features = ["clock"] }
+msedge-tts = "0.4"

@@ -67,6 +67,8 @@ pub fn screenshot_html(html_path: &Path, layout: &PosterLayout, out_path: &Path)
             "--no-default-browser-check",
             "--disable-extensions",
             "--disable-sync",
+            "--allow-file-access-from-files",
+            "--disable-web-security",
             "--run-all-compositor-stages-before-draw",
             "--virtual-time-budget=10000",
             &format!("--user-data-dir={}", profile_dir.display()),

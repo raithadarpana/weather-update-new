@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <style>
   /* Feel free to hand-edit this file to restyle the generated images.
-     Placeholders like ಮೈಸೂರು - 10 ದಿನಗಳ ಹವಾಮಾನ ಮುನ್ಸೂಚನೆ are substituted by src/html_render.rs at build time.
+     Placeholders like Mysore - 5 Days Weather Forecast are substituted by src/html_render.rs at build time.
      Kannada text is rendered by the headless browser (via image_gen.rs), so complex
      conjuncts/vowel-signs shape correctly -- unlike the old manual glyph-rasterizer.
 
@@ -17,7 +17,7 @@
      removing the fixed per-row heights below, or the overlap bug will come back. */
   @font-face {
     font-family: "Kannada";
-    src: url("file://D:/Projects/weather-update-new/assets/NotoSansKannada-VariableFont_wdth,wght.ttf");
+    src: url("file:///D:/Projects/weather-update-new/assets/NotoSansKannada-VariableFont_wdth,wght.ttf");
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
@@ -27,11 +27,43 @@
     overflow: hidden;
   }
   body {
-    background-image: url("file://D:/Projects/weather-update-new/assets/yt-bg.PNG");
+    /* CSS background-image is kept as a fallback, but the actual visible
+       background is the <img class="bg"> element below -- some headless
+       Chrome versions don't reliably composite a CSS background-image into
+       --screenshot output, while a real <img> element almost always renders. */
+    background-image: url("file:///D:/Projects/weather-update-new/assets/yt-bg.PNG");
     background-size: cover;
     background-position: center;
     color: #ffffff;
-    padding: 48px;
+    padding: 270px 24px 190px 24px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    position: relative;
+  }
+  img.bg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 1920px;
+    height: 1080px;
+    object-fit: cover;
+    z-index: -1;
+  }
+  .content {
+    position: relative;
+    z-index: 1;
+  }
+  .source {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 63px;
+    text-align: center;
+    font-size: 14px;
+    opacity: 0.75;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+    z-index: 2;
   }
   .header {
     height: 110px;
@@ -51,123 +83,114 @@
   }
   table.forecast {
     width: 100%;
-    height: 874px;
+    margin: 0 auto;
+    height: 472px;
     table-layout: fixed;
     border-collapse: separate;
     border-spacing: 0 8px;
   }
-  table.forecast col.day { width: 18%; }
+  table.forecast col.day { width: 26%; }
   table.forecast col.condition { width: 20%; }
   table.forecast col.temps { width: 16%; }
-  table.forecast col.precip { width: 10%; }
-  table.forecast col.summary { width: 36%; }
+  table.forecast col.summary { width: 38%; }
   table.forecast tr {
-    height: 80px;
+    height: 88px;
     background: rgba(0,0,0,0.42);
   }
   table.forecast tr:nth-child(even) {
     background: rgba(0,0,0,0.28);
   }
   table.forecast td {
-    height: 80px;
-    padding: 16px 16px;
-    font-size: 24px;
+    /* IMPORTANT: keep this as table-cell (the default for <td>). Do NOT put
+       display:-webkit-box directly on a <td> -- that silently overrides
+       table-cell layout and breaks the whole table (cells stack vertically
+       full-width instead of sitting side by side as columns, and rows lose
+       their fixed height). Any line-clamp styling goes on the .cell-clamp
+       <div> wrapper INSIDE the cell instead -- see rows below. */
+    height: 88px;
+    padding: 18px 10px;
+    font-size: 26px;
     line-height: 1.2;
     vertical-align: middle;
     overflow: hidden;
+    word-break: break-word;
   }
-  td.day { font-weight: 700; white-space: nowrap; }
-  td.temps { white-space: nowrap; color: #ffe08a; font-weight: 700; }
+  .cell-clamp {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+  td.day {
+    font-weight: 700;
+    overflow: hidden;
+  }
+  td.day .day-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  td.day .day-date {
+    font-weight: 400;
+    opacity: 0.85;
+    font-size: 0.85em;
+    white-space: nowrap;
+  }
+  td.temps { color: #ffe08a; font-weight: 700; }
   td.condition { opacity: 0.95; }
   td.summary {
     opacity: 0.9;
-    font-size: 18px;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
+    font-size: 20px;
+  }
+  td.summary .cell-clamp {
     -webkit-line-clamp: 2;
   }
 </style>
 </head>
 <body>
+  <img class="bg" src="file:///D:/Projects/weather-update-new/assets/yt-bg.PNG">
+  <div class="content">
   <div class="header">
-    <div class="title">ಮೈಸೂರು - 10 ದಿನಗಳ ಹವಾಮಾನ ಮುನ್ಸೂಚನೆ</div>
-    <div class="subtitle">10 ದಿನಗಳ ಹವಾಮಾನ ಮುನ್ಸೂಚನೆ</div>
+    <div class="title">Mysore - 5 Days Weather Forecast</div>
+    <div class="subtitle">5 ದಿನಗಳ ಹವಾಮಾನ ಮುನ್ಸೂಚನೆ</div>
   </div>
   <table class="forecast">
     <colgroup>
-      <col class="day"><col class="condition"><col class="temps"><col class="precip"><col class="summary">
+      <col class="day"><col class="condition"><col class="temps"><col class="summary">
     </colgroup>
         <tr>
-      <td class="day">ಬುಧವಾರ 08 05</td>
-      <td class="condition">ಮಳೆ</td>
-      <td class="temps">28° / 21°</td>
-      <td class="precip">87%</td>
-      <td class="summary">ಮಳೆ ಅಥವಾ ಮಿಂಚುಳ್ಳ ವಾತಾವರಣ; ಮಳೆ ಸಾಧ್ಯತೆ ಹೆಚ್ಚು.</td>
+      <td class="day"><div class="day-name">ಗುರುವಾರ</div><div class="day-date">08 06</div></td>
+      <td class="condition"><div class="cell-clamp">ಗುಡುಗು ಸಹಿತ ಮಳೆ</div></td>
+      <td class="temps"><div class="cell-clamp">27° / 21°</div></td>
+      <td class="summary"><div class="cell-clamp">ಗುಡುಗು ಸಹಿತ ಮಳೆಯ ಸಾಧ್ಯತೆ; ಮಳೆ ಸಾಧ್ಯತೆ ಹೆಚ್ಚು.</div></td>
     </tr>
     <tr>
-      <td class="day">ಗುರುವಾರ 08 06</td>
-      <td class="condition">ಮಳೆ</td>
-      <td class="temps">29° / 21°</td>
-      <td class="precip">91%</td>
-      <td class="summary">ಮಳೆ ಅಥವಾ ಮಿಂಚುಳ್ಳ ವಾತಾವರಣ; ಮಳೆ ಸಾಧ್ಯತೆ ಹೆಚ್ಚು.</td>
+      <td class="day"><div class="day-name">ಶುಕ್ರವಾರ</div><div class="day-date">08 07</div></td>
+      <td class="condition"><div class="cell-clamp">ಮಳೆ</div></td>
+      <td class="temps"><div class="cell-clamp">28° / 21°</div></td>
+      <td class="summary"><div class="cell-clamp">ಮಳೆ ಅಥವಾ ಮಿಂಚುಳ್ಳ ವಾತಾವರಣ; ಮಳೆ ಸಾಧ್ಯತೆ ಹೆಚ್ಚು.</div></td>
     </tr>
     <tr>
-      <td class="day">ಶುಕ್ರವಾರ 08 07</td>
-      <td class="condition">ಮಳೆ</td>
-      <td class="temps">27° / 21°</td>
-      <td class="precip">100%</td>
-      <td class="summary">ಮಳೆ ಅಥವಾ ಮಿಂಚುಳ್ಳ ವಾತಾವರಣ; ಮಳೆ ಸಾಧ್ಯತೆ ಹೆಚ್ಚು.</td>
+      <td class="day"><div class="day-name">ಶನಿವಾರ</div><div class="day-date">08 08</div></td>
+      <td class="condition"><div class="cell-clamp">ಮಳೆ</div></td>
+      <td class="temps"><div class="cell-clamp">28° / 21°</div></td>
+      <td class="summary"><div class="cell-clamp">ಮಳೆ ಅಥವಾ ಮಿಂಚುಳ್ಳ ವಾತಾವರಣ; ಮಳೆ ಸಾಧ್ಯತೆ ಹೆಚ್ಚು.</div></td>
     </tr>
     <tr>
-      <td class="day">ಶನಿವಾರ 08 08</td>
-      <td class="condition">ಮಳೆ</td>
-      <td class="temps">28° / 21°</td>
-      <td class="precip">88%</td>
-      <td class="summary">ಮಳೆ ಅಥವಾ ಮಿಂಚುಳ್ಳ ವಾತಾವರಣ; ಮಳೆ ಸಾಧ್ಯತೆ ಹೆಚ್ಚು.</td>
+      <td class="day"><div class="day-name">ಭಾನುವಾರ</div><div class="day-date">08 09</div></td>
+      <td class="condition"><div class="cell-clamp">ಮಳೆ</div></td>
+      <td class="temps"><div class="cell-clamp">30° / 21°</div></td>
+      <td class="summary"><div class="cell-clamp">ಮಳೆ ಅಥವಾ ಮಿಂಚುಳ್ಳ ವಾತಾವರಣ; ಮಳೆ ಸಾಧ್ಯತೆ ಹೆಚ್ಚು.</div></td>
     </tr>
     <tr>
-      <td class="day">ಭಾನುವಾರ 08 09</td>
-      <td class="condition">ಮಳೆ</td>
-      <td class="temps">28° / 21°</td>
-      <td class="precip">97%</td>
-      <td class="summary">ಮಳೆ ಅಥವಾ ಮಿಂಚುಳ್ಳ ವಾತಾವರಣ; ಮಳೆ ಸಾಧ್ಯತೆ ಹೆಚ್ಚು.</td>
-    </tr>
-    <tr>
-      <td class="day">ಸೋಮವಾರ 08 10</td>
-      <td class="condition">ಮಳೆ</td>
-      <td class="temps">27° / 20°</td>
-      <td class="precip">96%</td>
-      <td class="summary">ಮಳೆ ಅಥವಾ ಮಿಂಚುಳ್ಳ ವಾತಾವರಣ; ಮಳೆ ಸಾಧ್ಯತೆ ಹೆಚ್ಚು.</td>
-    </tr>
-    <tr>
-      <td class="day">ಮಂಗಳವಾರ 08 11</td>
-      <td class="condition">ಮಳೆ</td>
-      <td class="temps">27° / 20°</td>
-      <td class="precip">78%</td>
-      <td class="summary">ಮಳೆ ಅಥವಾ ಮಿಂಚುಳ್ಳ ವಾತಾವರಣ; ಮಳೆ ಸಾಧ್ಯತೆ ಹೆಚ್ಚು.</td>
-    </tr>
-    <tr>
-      <td class="day">ಬುಧವಾರ 08 12</td>
-      <td class="condition">ಮಳೆ</td>
-      <td class="temps">27° / 21°</td>
-      <td class="precip">94%</td>
-      <td class="summary">ಮಳೆ ಅಥವಾ ಮಿಂಚುಳ್ಳ ವಾತಾವರಣ; ಮಳೆ ಸಾಧ್ಯತೆ ಹೆಚ್ಚು.</td>
-    </tr>
-    <tr>
-      <td class="day">ಗುರುವಾರ 08 13</td>
-      <td class="condition">ಮಳೆ</td>
-      <td class="temps">28° / 20°</td>
-      <td class="precip">90%</td>
-      <td class="summary">ಮಳೆ ಅಥವಾ ಮಿಂಚುಳ್ಳ ವಾತಾವರಣ; ಮಳೆ ಸಾಧ್ಯತೆ ಹೆಚ್ಚು.</td>
-    </tr>
-    <tr>
-      <td class="day">ಶುಕ್ರವಾರ 08 14</td>
-      <td class="condition">ಮಳೆ</td>
-      <td class="temps">28° / 21°</td>
-      <td class="precip">86%</td>
-      <td class="summary">ಮಳೆ ಅಥವಾ ಮಿಂಚುಳ್ಳ ವಾತಾವರಣ; ಮಳೆ ಸಾಧ್ಯತೆ ಹೆಚ್ಚು.</td>
+      <td class="day"><div class="day-name">ಸೋಮವಾರ</div><div class="day-date">08 10</div></td>
+      <td class="condition"><div class="cell-clamp">ಮಳೆ</div></td>
+      <td class="temps"><div class="cell-clamp">28° / 21°</div></td>
+      <td class="summary"><div class="cell-clamp">ಮಳೆ ಅಥವಾ ಮಿಂಚುಳ್ಳ ವಾತಾವರಣ; ಮಳೆ ಸಾಧ್ಯತೆ ಹೆಚ್ಚು.</div></td>
     </tr>
 
   </table>
+  <div class="source">Source: open-meteo.com</div>
+  </div>
 </body>
 </html>

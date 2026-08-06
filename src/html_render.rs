@@ -59,6 +59,7 @@ pub struct PosterLayout {
     pub width: u32,
     pub height: u32,
     pub padding: u32,
+    pub padding_bottom: u32,
     pub title_size: u32,
     pub subtitle_size: u32,
     pub header_height: u32,
@@ -71,7 +72,11 @@ impl PosterLayout {
         Self {
             width: 1080,
             height: 1920,
-            padding: 56,
+            padding: 28,
+            // Extra clearance so the table doesn't sit on top of a background
+            // image's own header/logo art (top) or footer band (bottom).
+            // Tune these to match your specific ig-bg.png/yt-bg.png artwork.
+            padding_bottom: 220,
             title_size: 52,
             subtitle_size: 28,
             header_height: 150,
@@ -84,7 +89,8 @@ impl PosterLayout {
         Self {
             width: 1920,
             height: 1080,
-            padding: 48,
+            padding: 24,
+            padding_bottom: 190,
             title_size: 46,
             subtitle_size: 24,
             header_height: 110,
@@ -103,6 +109,7 @@ pub fn render_poster_html(
     days: &[DayForecast],
     title: &str,
     subtitle: &str,
+    source_label: &str,
     template_path: &Path,
     font_path: &Path,
     bg_image_path: &Path,
@@ -114,10 +121,17 @@ pub fn render_poster_html(
 
     let n = days.len().max(1) as u32;
     let row_gap = 8u32;
+    let source_reserved = layout.min_row_font + 24; // room for the bottom source line
+    // Content starts 25% down the canvas (clears background header art), not
+    // vertically centered -- per requirement, the table position is anchored
+    // at the 25% mark rather than floating based on content height.
+    let padding_top = layout.height * 25 / 100;
     let available_height = layout
         .height
-        .saturating_sub(2 * layout.padding)
-        .saturating_sub(layout.header_height);
+        .saturating_sub(padding_top)
+        .saturating_sub(layout.padding_bottom)
+        .saturating_sub(layout.header_height)
+        .saturating_sub(source_reserved);
     let table_height = available_height;
     let row_height = (table_height.saturating_sub(row_gap * (n.saturating_sub(1)))) / n;
     let row_height = row_height.max(40);
@@ -137,7 +151,7 @@ pub fn render_poster_html(
     let mut rows = String::new();
     for day in days {
         rows.push_str(&format!(
-            "    <tr>\n      <td class=\"day\">{} {}</td>\n      <td class=\"condition\">{}</td>\n      <td class=\"temps\">{} / {}</td>\n      <td class=\"summary\">{}</td>\n    </tr>\n",
+            "    <tr>\n      <td class=\"day\"><div class=\"day-name\">{}</div><div class=\"day-date\">{}</div></td>\n      <td class=\"condition\"><div class=\"cell-clamp\">{}</div></td>\n      <td class=\"temps\"><div class=\"cell-clamp\">{} / {}</div></td>\n      <td class=\"summary\"><div class=\"cell-clamp\">{}</div></td>\n    </tr>\n",
             escape(&day.day_name),
             escape(&day.date),
             escape(&day.condition),
@@ -155,6 +169,8 @@ pub fn render_poster_html(
         .replace("{{WIDTH}}", &layout.width.to_string())
         .replace("{{HEIGHT}}", &layout.height.to_string())
         .replace("{{PADDING}}", &layout.padding.to_string())
+        .replace("{{PADDING_TOP}}", &padding_top.to_string())
+        .replace("{{PADDING_BOTTOM}}", &layout.padding_bottom.to_string())
         .replace("{{TITLE_SIZE}}", &layout.title_size.to_string())
         .replace("{{SUBTITLE_SIZE}}", &layout.subtitle_size.to_string())
         .replace("{{HEADER_HEIGHT}}", &layout.header_height.to_string())
@@ -166,10 +182,14 @@ pub fn render_poster_html(
         .replace("{{ROW_FONT_SIZE}}", &row_font_size.to_string())
         .replace("{{SUMMARY_FONT_SIZE}}", &summary_font_size.to_string())
         .replace("{{SUMMARY_MAX_LINES}}", &summary_max_lines.to_string())
-        .replace("{{COL_DAY_PCT}}", "20")
-        .replace("{{COL_CONDITION_PCT}}", "22")
-        .replace("{{COL_TEMPS_PCT}}", "18")
-        .replace("{{COL_SUMMARY_PCT}}", "40")
+        .replace("{{ROW_MAX_LINES}}", &summary_max_lines.max(2).to_string())
+        .replace("{{COL_DAY_PCT}}", "26")
+        .replace("{{COL_CONDITION_PCT}}", "20")
+        .replace("{{COL_TEMPS_PCT}}", "16")
+        .replace("{{COL_SUMMARY_PCT}}", "38")
+        .replace("{{SOURCE_LABEL}}", &escape(source_label))
+        .replace("{{SOURCE_FONT_SIZE}}", &(layout.min_row_font).to_string())
+        .replace("{{SOURCE_BOTTOM}}", &(layout.padding_bottom / 3).max(10).to_string())
         .replace("{{ROWS}}", &rows);
 
     fs::write(out_path, html)

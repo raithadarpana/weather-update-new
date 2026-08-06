@@ -19,7 +19,7 @@ pub fn fetch_and_parse(html_out_path: &Path) -> Result<Vec<DayForecast>> {
         .build()?;
 
     let url = format!(
-        "{WEATHER_API_URL}?latitude=12.30&longitude=76.65&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FKolkata&forecast_days=10"
+        "{WEATHER_API_URL}?latitude=12.30&longitude=76.65&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FKolkata&forecast_days=5"
     );
 
     match client.get(&url).send() {

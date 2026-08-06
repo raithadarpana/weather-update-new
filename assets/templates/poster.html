@@ -27,14 +27,43 @@
     overflow: hidden;
   }
   body {
+    /* CSS background-image is kept as a fallback, but the actual visible
+       background is the <img class="bg"> element below -- some headless
+       Chrome versions don't reliably composite a CSS background-image into
+       --screenshot output, while a real <img> element almost always renders. */
     background-image: url("{{BG_IMAGE}}");
     background-size: cover;
     background-position: center;
     color: #ffffff;
-    padding: {{PADDING}}px;
+    padding: {{PADDING_TOP}}px {{PADDING}}px {{PADDING_BOTTOM}}px {{PADDING}}px;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
+    position: relative;
+  }
+  img.bg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: {{WIDTH}}px;
+    height: {{HEIGHT}}px;
+    object-fit: cover;
+    z-index: -1;
+  }
+  .content {
+    position: relative;
+    z-index: 1;
+  }
+  .source {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: {{SOURCE_BOTTOM}}px;
+    text-align: center;
+    font-size: {{SOURCE_FONT_SIZE}}px;
+    opacity: 0.75;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+    z-index: 2;
   }
   .header {
     height: {{HEADER_HEIGHT}}px;
@@ -54,6 +83,7 @@
   }
   table.forecast {
     width: 100%;
+    margin: 0 auto;
     height: {{TABLE_HEIGHT}}px;
     table-layout: fixed;
     border-collapse: separate;
@@ -71,26 +101,55 @@
     background: rgba(0,0,0,0.28);
   }
   table.forecast td {
+    /* IMPORTANT: keep this as table-cell (the default for <td>). Do NOT put
+       display:-webkit-box directly on a <td> -- that silently overrides
+       table-cell layout and breaks the whole table (cells stack vertically
+       full-width instead of sitting side by side as columns, and rows lose
+       their fixed height). Any line-clamp styling goes on the .cell-clamp
+       <div> wrapper INSIDE the cell instead -- see rows below. */
     height: {{ROW_HEIGHT}}px;
     padding: {{ROW_PAD_V}}px {{ROW_PAD_H}}px;
     font-size: {{ROW_FONT_SIZE}}px;
     line-height: 1.2;
     vertical-align: middle;
     overflow: hidden;
+    word-break: break-word;
   }
-  td.day { font-weight: 700; white-space: nowrap; }
-  td.temps { white-space: nowrap; color: #ffe08a; font-weight: 700; }
+  .cell-clamp {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: {{ROW_MAX_LINES}};
+    overflow: hidden;
+  }
+  td.day {
+    font-weight: 700;
+    overflow: hidden;
+  }
+  td.day .day-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  td.day .day-date {
+    font-weight: 400;
+    opacity: 0.85;
+    font-size: 0.85em;
+    white-space: nowrap;
+  }
+  td.temps { color: #ffe08a; font-weight: 700; }
   td.condition { opacity: 0.95; }
   td.summary {
     opacity: 0.9;
     font-size: {{SUMMARY_FONT_SIZE}}px;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
+  }
+  td.summary .cell-clamp {
     -webkit-line-clamp: {{SUMMARY_MAX_LINES}};
   }
 </style>
 </head>
 <body>
+  <img class="bg" src="{{BG_IMAGE}}">
+  <div class="content">
   <div class="header">
     <div class="title">{{TITLE}}</div>
     <div class="subtitle">{{SUBTITLE}}</div>
@@ -101,5 +160,7 @@
     </colgroup>
     {{ROWS}}
   </table>
+  <div class="source">{{SOURCE_LABEL}}</div>
+  </div>
 </body>
 </html>
